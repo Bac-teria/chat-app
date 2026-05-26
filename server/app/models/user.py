@@ -17,11 +17,11 @@ class UserModel(Base):
     """
     __tablename__ = "pessoa"
 
-    usuario: Mapped[str] = mapped_column(String, primary_key=True)
-    email: Mapped[str] = mapped_column(String, unique=True)
-    senha: Mapped[str] = mapped_column(String)
-    telefone: Mapped[str] = mapped_column(String, unique=True)
-    nome: Mapped[str] = mapped_column(String)
-    sobrenome: Mapped[str | None] = mapped_column(String)
-    biografia: Mapped[str | None] = mapped_column(String)
-    caminho_foto: Mapped[str | None] = mapped_column(String)
+    usuario: Mapped[str] = mapped_column("USUARIO", String, primary_key=True)
+    email: Mapped[str] = mapped_column("EMAIL", String, unique=True)
+    senha: Mapped[str] = mapped_column("SENHA", String)
+    telefone: Mapped[str] = mapped_column("TELEFONE", String, unique=True)
+    nome: Mapped[str] = mapped_column("NOME", String)
+    sobrenome: Mapped[str | None] = mapped_column("SOBRENOME", String)
+    biografia: Mapped[str | None] = mapped_column("BIOGRAFIA", String)
+    caminho_foto: Mapped[str | None] = mapped_column("CAMINHO_FOTO", String)
