@@ -18,6 +18,10 @@ async def endpoint_websocket(websocket: WebSocket, nome_usuario: str):
             # Recebe o texto do Frontend
             texto_recebido = await websocket.receive_text()
 
+            # Verificação de texto vazio
+            if not texto_recebido.strip():
+                continue
+
             # Abre uma sessão com o banco de dados e salva as informações da mensagem
             with SessionLocal() as db:
                 nova_mensagem = MensagemModel(
