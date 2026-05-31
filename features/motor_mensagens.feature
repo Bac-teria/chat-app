@@ -8,7 +8,8 @@ Feature: Motor de Mensagens
     When "joao" envia a mensagem "Olá, Maria"
     Then a mensagem é persistida no banco com o texto "Olá, Maria"
     And a mensagem é registrada com o status "ENVIADO"
-    And o campo "usuario" da mensagem aponta para "joao"
+    And o campo "usuario" 
+    da mensagem aponta para "joao"
 
   Scenario: Roteamento de mensagem para destinatário conectado
     Given que o usuário "joao" está conectado via WebSocket
