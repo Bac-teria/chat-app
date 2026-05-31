@@ -9,19 +9,19 @@ from main import app
 # MAPEAMENTO DOS CENÁRIOS
 # ==========================================
 
-@scenario('features/motor-mensage.feature', 'Persistência de mensagem enviada com sucesso')
+@scenario('motor_mensagens.feature', 'Persistência de mensagem enviada com sucesso')
 def test_persistencia_mensagem_enviada():
     pass
 
-@scenario('features/motor-mensage.feature', 'Roteamento de mensagem para destinatário conectado')
+@scenario('motor_mensagens.feature', 'Roteamento de mensagem para destinatário conectado')
 def test_roteamento_destinatario_conectado():
     pass
 
-@scenario('features/motor-mensage.feature', 'Persistência de mensagem recebida com status correto')
+@scenario('motor_mensagens.feature', 'Persistência de mensagem recebida com status correto')
 def test_persistencia_status_correto():
     pass
 
-@scenario('features/motor-mensage.feature', 'Rejeição de mensagem com conteúdo vazio')
+@scenario('motor_mensagens.feature', 'Rejeição de mensagem com conteúdo vazio')
 def test_rejeicao_mensagem_vazia():
     pass
 
@@ -37,15 +37,16 @@ def contexto(client):
     """
     estado = {
         "sockets": {},
+        "socket_contexts": {}, # <--- NOVO: Guarda o "portal" da conexão
         "db": next(app.dependency_overrides[get_db]()),
         "mensagens_no_banco_antes": 0
     }
     
     yield estado
     
-    # Limpeza após o cenário
-    for ws in estado["sockets"].values():
-        ws.close()
+    # Limpeza após o cenário: Fechando o portal corretamente
+    for ctx in estado["socket_contexts"].values():
+        ctx.__exit__(None, None, None)
 
 # ==========================================
 # GIVEN (DADO QUE...)
@@ -56,7 +57,7 @@ def contexto(client):
 def conectar_usuario(usuario, client, contexto):
     db = contexto["db"]
     
-    # 1. Garante que o usuário existe no banco para não dar erro de ForeignKey
+    # 1. Garante que o usuário existe no banco
     user_existente = db.query(UserModel).filter(UserModel.usuario == usuario).first()
     if not user_existente:
         novo_user = UserModel(
@@ -66,11 +67,14 @@ def conectar_usuario(usuario, client, contexto):
         db.add(novo_user)
         db.commit()
 
-    # 2. Conecta no WebSocket simulado e guarda o socket no dicionário
-    ws = client.websocket_connect(f"/ws/{usuario}")
+    # 2. Conecta no WebSocket manualmente abrindo o portal
+    ws_context = client.websocket_connect(f"/ws/{usuario}")
+    ws = ws_context.__enter__() # <--- Abre o portal de fato
+    
+    contexto["socket_contexts"][usuario] = ws_context
     contexto["sockets"][usuario] = ws
     
-    # Conta quantas mensagens já tem no banco antes de começar a ação
+    # Conta quantas mensagens já tem no banco
     contexto["mensagens_no_banco_antes"] = db.query(MensagemModel).count()
 
 
