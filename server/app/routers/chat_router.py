@@ -1,7 +1,8 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from datetime import datetime
 
-from app.database import SessionLocal
+
+from app import database
 from app.models.mensagem import MensagemModel
 from app.models.grupo import GrupoModel
 from app.core.ws_manager import gerenciador 
@@ -23,7 +24,7 @@ async def endpoint_websocket(websocket: WebSocket, nome_usuario: str):
                 continue
 
             # Abre uma sessão com o banco de dados e salva as informações da mensagem
-            with SessionLocal() as db:
+            with database.SessionLocal() as db:
                 nova_mensagem = MensagemModel(
                     timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     texto = texto_recebido,

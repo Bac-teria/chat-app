@@ -1,4 +1,5 @@
 import pytest
+import time
 from pytest_bdd import scenario, given, when, then, parsers
 from app.models.user import UserModel
 from app.models.mensagem import MensagemModel
@@ -87,6 +88,8 @@ def enviar_mensagem_texto(usuario, texto, contexto):
     ws = contexto["sockets"][usuario]
     ws.send_text(texto)
     contexto["ultima_mensagem_enviada"] = texto
+
+    time.sleep(0.1)
 
 @when(parsers.parse('"{usuario}" tenta enviar uma mensagem contendo apenas espaços ou quebras de linha'))
 def enviar_mensagem_vazia(usuario, contexto):
