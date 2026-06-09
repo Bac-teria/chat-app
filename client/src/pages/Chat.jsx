@@ -57,12 +57,12 @@ export default function Chat() {
         ws.current.onopen = () => console.log("WebSocket Conectado como:", usuarioLogado);
 
         ws.current.onmessage = (event) => {
-            let textoFinal = event.data; 
+            let textoFinal = event.data;
 
             try {
                 const stringCorrigida = event.data.replace(/'/g, '"');
 
-                
+
                 const pacote = JSON.parse(stringCorrigida);
 
                 if (typeof pacote === 'object' && pacote !== null) {
@@ -78,7 +78,12 @@ export default function Chat() {
                 }
             }
 
-            setHistorico((prev) => [...prev, `[Recebido]: ${textoFinal}`]);
+            // NOVA FORMATAÇÃO: Adiciona a mensagem recebida como Objeto
+            setHistorico((prev) => [...prev, {
+                id_mensagem: Date.now(), // ID provisório gerado pelo navegador
+                texto: textoFinal,
+                remetente: contatoAtivo?.usuario || contatoAtivo?.email
+            }]);
         };
         return () => ws.current?.close();
     }, [usuarioLogado]);
@@ -89,66 +94,60 @@ export default function Chat() {
     }, [historico]);
 
     // Efeito para carregar o histórico de mensagens quando muda de contato
-  useEffect(() => {
-    const carregarHistorico = async () => {
-      // Se não houver contato selecionado, não faz nada
-      if (!contatoAtivo) return;
+    useEffect(() => {
+        const carregarHistorico = async () => {
+            if (!contatoAtivo) return;
 
-      try {
-        // Limpa a tela para não misturar mensagens de pessoas diferentes
-        setHistorico([]);
+            try {
+                setHistorico([]);
 
-        // O identificador do contato
-        const destinatario = contatoAtivo.usuario;
+                const destinatario = contatoAtivo.usuario || contatoAtivo.email;
+                if (!destinatario) return; // Trava de segurança para evitar erro 405
 
-        // Faz o pedido à nova rota do backend (que trará o histórico entre si e o contato)
-        const resposta = await fetch(`http://127.0.0.1:8000/mensagens/${usuarioLogado}/${destinatario}`);
+                const resposta = await fetch(`http://127.0.0.1:8000/mensagens/${usuarioLogado}/${destinatario}`);
 
-        if (resposta.ok) {
-          const mensagensAntigas = await resposta.json();
+                if (resposta.ok) {
+                    const mensagensAntigas = await resposta.json();
 
-          // Formata as mensagens vindas da base de dados
-          const historicoFormatado = mensagensAntigas.map(msg => {
-            if (msg.remetente === usuarioLogado) {
-              return `[Você]: ${msg.texto}`;
-            } 
-            else {
-              return `[Recebido]: ${msg.texto}`;
+                    // Converte os dados do backend para Objetos
+                    const historicoFormatado = mensagensAntigas.map(msg => ({
+                        id_mensagem: msg.id_mensagem, // Garantindo que o ID do backend venha para o React
+                        texto: msg.texto,
+                        remetente: msg.remetente,
+                        editada: msg.editada || false
+                    }));
+
+                    setHistorico(historicoFormatado);
+                }
+            } catch (erro) {
+                console.error("Erro ao carregar o histórico:", erro);
             }
-          });
-          setHistorico(historicoFormatado);
-        }
-      } catch (erro) {
-        console.error("Erro ao carregar o histórico:", erro);
-      }
-    };
+        };
 
-    carregarHistorico();
-  }, [contatoAtivo, usuarioLogado]); // Este efeito dispara SEMPRE que o contatoAtivo mudar!
+        carregarHistorico();
+    }, [contatoAtivo, usuarioLogado]);
 
     // Função para Enviar a Mensagem
     const enviarMensagem = () => {
         if (!mensagem.trim() || !contatoAtivo) return;
 
         const pacote = {
-            para: contatoAtivo.usuario || contatoAtivo.email, // Ajustado para aceitar email se for o caso
+            para: contatoAtivo.usuario || contatoAtivo.email,
             texto: mensagem
         };
 
         ws.current.send(JSON.stringify(pacote));
-        setHistorico((prev) => [...prev, `[Você]: ${mensagem}`]);
+
+
+        setHistorico((prev) => [...prev, {
+            id_mensagem: Date.now(), // ID provisório gerado pelo navegador
+            texto: mensagem,
+            remetente: usuarioLogado
+        }]);
         setMensagem('');
     };
 
     // Função responsável por editar uma mensagem já existente.
-    // Primeiro solicita ao usuário o novo texto da mensagem.
-    // Em seguida envia uma requisição PUT para o backend,
-    // informando o ID da mensagem, o usuário que está editando
-    // e o novo conteúdo.
-    // Caso a operação seja concluída com sucesso,
-    // atualizamos o estado local do React para refletir
-    // imediatamente a alteração na interface.
-
     const editarMensagem = async (msg) => {
         const novoTexto = prompt("Novo texto da mensagem:", msg.texto);
         if (!novoTexto) return;
@@ -159,8 +158,8 @@ export default function Chat() {
             body: JSON.stringify({
                 usuario: usuarioLogado,
                 novo_texto: novoTexto
-        })
-    });
+            })
+        });
 
         if (resposta.ok) {
             setHistorico((prev) =>
@@ -174,12 +173,6 @@ export default function Chat() {
     };
 
     // Função responsável por excluir uma mensagem.
-    // Envia uma requisição DELETE para o backend
-    // informando o ID da mensagem e o usuário que
-    // está solicitando a exclusão.
-    // Caso a operação seja autorizada e concluída,
-    // a mensagem é removida do estado local para que
-    // desapareça imediatamente da interface.
     const excluirMensagem = async (msg) => {
         const resposta = await fetch(`http://127.0.0.1:8000/mensagens/${msg.id_mensagem}`, {
             method: "DELETE",
@@ -196,123 +189,117 @@ export default function Chat() {
         }
     };
 
-
-
     // A Interface da Tela
     return (
         <>
-        <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
+            <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
 
-            {/* BARRA LATERAL */}
-            <div style={{ width: '300px', borderRight: '1px solid #ccc', backgroundColor: '#f9f9f9', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ padding: '20px', borderBottom: '1px solid #ddd', backgroundColor: '#e2e2e2' }}>
-                    <strong>Logado como:</strong> <br /> 
-                    <span>{usuarioLogado}</span>
+                {/* BARRA LATERAL */}
+                <div style={{ width: '300px', borderRight: '1px solid #ccc', backgroundColor: '#f9f9f9', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ padding: '20px', borderBottom: '1px solid #ddd', backgroundColor: '#e2e2e2' }}>
+                        <strong>Logado como:</strong> <br />
+                        <span>{usuarioLogado}</span>
 
-                    <button
-                        data-cy="btn-configuracoes"
-                        onClick={() => setPerfilAberto(true)}
-                        style={{
-                            marginTop: '12px',
-                            width: '100%',
-                            padding: '10px',
-                            borderRadius: '20px',
-                            border: 'none',
-                            backgroundColor: '#0E49B5',
-                            color: '#fff',
-                            fontWeight: 'bold',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        ⚙️ Configurações
-                    </button>
-                </div>
-
-                <h3 style={{ padding: '10px 20px', margin: 0 }}>Contatos</h3>
-                <ul style={{ listStyle: 'none', padding: 0, margin: 0, overflowY: 'auto', flex: 1 }}>
-                    {contatos.map((contato, index) => (
-                        <li
-                            key={index}
-                            onClick={() => setContatoAtivo(contato)}
+                        <button
+                            data-cy="btn-configuracoes"
+                            onClick={() => setPerfilAberto(true)}
                             style={{
-                                padding: '15px 20px',
-                                cursor: 'pointer',
-                                backgroundColor: contatoAtivo?.usuario === contato.usuario ? '#d1ecf1' : 'transparent',
-                                borderBottom: '1px solid #eee',
-                                transition: 'background-color 0.2s'
+                                marginTop: '12px',
+                                width: '100%',
+                                padding: '10px',
+                                borderRadius: '20px',
+                                border: 'none',
+                                backgroundColor: '#0E49B5',
+                                color: '#fff',
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
                             }}
                         >
-                            <strong>{contato.nome || contato.usuario || contato.email}</strong> <br />
-                            <small style={{ color: '#666' }}>@{contato.usuario || contato.email}</small>
-                        </li>
-                    ))}
-                </ul>
-            </div>
-
-            {/* ÁREA DE MENSAGENS */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                {contatoAtivo ? (
-                    <>
-                        <div style={{ padding: '20px', borderBottom: '1px solid #ccc', backgroundColor: '#fff' }}>
-                            <h2>Conversando com: {contatoAtivo.nome || contatoAtivo.usuario || contatoAtivo.email}</h2>
-                        </div>
-
-                        <div style={{ flex: 1, padding: '20px', overflowY: 'auto', backgroundColor: '#ece5dd' }}>
-                            {historico.map((msg, index) => (
-                                <div key={index} style={{ marginBottom: '10px', textAlign: msg.startsWith('[Você]') ? 'right' : 'left' }}>
-                                    <span style={{
-                                        display: 'inline-block',
-                                        padding: '10px 15px',
-                                        borderRadius: '8px',
-                                        backgroundColor: msg.startsWith('[Você]') ? '#dcf8c6' : '#fff',
-                                        boxShadow: '0 1px 1px rgba(0,0,0,0.1)'
-                                    }}>
-                                        {msg}
-                                    </span>
-                                </div>
-                            ))}
-                            <div ref={fimDoChatRef} />
-                        </div>
-
-                        <div style={{ padding: '20px', backgroundColor: '#f0f0f0', display: 'flex' }}>
-                            <input
-                                type="text"
-                                value={mensagem}
-                                onChange={(e) => setMensagem(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && enviarMensagem()}
-                                placeholder="Escreva uma mensagem..."
-                                style={{ flex: 1, padding: '15px', borderRadius: '8px', border: '1px solid #ccc', marginRight: '10px', outline: 'none' }}
-                            />
-                            <button
-                                onClick={enviarMensagem}
-                                style={{ padding: '0 25px', borderRadius: '8px', border: 'none', backgroundColor: '#007bff', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}
-                            >
-                                Enviar
-                            </button>
-                        </div>
-                    </>
-                ) : (
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f4f4f4' }}>
-                        <h2 style={{ color: '#888' }}>Clique em um contato na barra lateral para iniciar</h2>
+                            ⚙️ Configurações
+                        </button>
                     </div>
-                )}
-            </div>
-            
-        </div>
 
-        {perfilAberto && (
-            <div style={{
-                position: 'fixed',
-                inset: 0,
-                backgroundColor: 'rgba(6, 6, 93, 0.35)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 9999
-            }}>
-                <Perfil onClose={() => setPerfilAberto(false)} />
+                    <h3 style={{ padding: '10px 20px', margin: 0 }}>Contatos</h3>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, overflowY: 'auto', flex: 1 }}>
+                        {contatos.map((contato, index) => (
+                            <li
+                                key={index}
+                                onClick={() => setContatoAtivo(contato)}
+                                style={{
+                                    padding: '15px 20px',
+                                    cursor: 'pointer',
+                                    backgroundColor: contatoAtivo?.usuario === contato.usuario ? '#d1ecf1' : 'transparent',
+                                    borderBottom: '1px solid #eee',
+                                    transition: 'background-color 0.2s'
+                                }}
+                            >
+                                <strong>{contato.nome || contato.usuario || contato.email}</strong> <br />
+                                <small style={{ color: '#666' }}>@{contato.usuario || contato.email}</small>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                {/* ÁREA DE MENSAGENS */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    {contatoAtivo ? (
+                        <>
+                            <div style={{ padding: '20px', borderBottom: '1px solid #ccc', backgroundColor: '#fff' }}>
+                                <h2>Conversando com: {contatoAtivo.nome || contatoAtivo.usuario || contatoAtivo.email}</h2>
+                            </div>
+
+                            <div style={{ flex: 1, padding: '20px', overflowY: 'auto', backgroundColor: '#ece5dd' }}>
+                                {historico.map((msg, index) => (
+                                    <MensagemItem
+                                        key={msg.id_mensagem || index}
+                                        msg={msg}
+                                        usuarioLogado={usuarioLogado}
+                                        onEditar={() => editarMensagem(msg)}
+                                        onExcluir={() => excluirMensagem(msg)}
+                                    />
+                                ))}
+                                <div ref={fimDoChatRef} />
+                            </div>
+
+                            <div style={{ padding: '20px', backgroundColor: '#f0f0f0', display: 'flex' }}>
+                                <input
+                                    type="text"
+                                    value={mensagem}
+                                    onChange={(e) => setMensagem(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && enviarMensagem()}
+                                    placeholder="Escreva uma mensagem..."
+                                    style={{ flex: 1, padding: '15px', borderRadius: '8px', border: '1px solid #ccc', marginRight: '10px', outline: 'none' }}
+                                />
+                                <button
+                                    onClick={enviarMensagem}
+                                    style={{ padding: '0 25px', borderRadius: '8px', border: 'none', backgroundColor: '#007bff', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}
+                                >
+                                    Enviar
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f4f4f4' }}>
+                            <h2 style={{ color: '#888' }}>Clique em um contato na barra lateral para iniciar</h2>
+                        </div>
+                    )}
+                </div>
+
             </div>
-        )}
+
+            {perfilAberto && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(6, 6, 93, 0.35)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999
+                }}>
+                    <Perfil onClose={() => setPerfilAberto(false)} />
+                </div>
+            )}
 
         </>
     );
