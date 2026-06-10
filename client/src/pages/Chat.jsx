@@ -148,9 +148,66 @@ export default function Chat() {
     };
 
     // Função responsável por editar uma mensagem já existente.
+    // Primeiro solicita ao usuário o novo texto da mensagem.
+    // Em seguida envia uma requisição PUT para o backend,
+    // informando o ID da mensagem, o usuário que está editando
+    // e o novo conteúdo.
+    // Caso a operação seja concluída com sucesso,
+    // atualizamos o estado local do React para refletir
+    // imediatamente a alteração na interface.
+
     const editarMensagem = async (msg) => {
         const novoTexto = prompt("Novo texto da mensagem:", msg.texto);
         if (!novoTexto) return;
+
+        const resposta = await fetch(`http://127.0.0.1:8000/mensagens/${msg.id_mensagem}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                usuario: usuarioLogado,
+                novo_texto: novoTexto
+        })
+    });
+
+        if (resposta.ok) {
+            setHistorico((prev) =>
+                prev.map((m) =>
+                    m.id_mensagem === msg.id_mensagem
+                        ? { ...m, texto: novoTexto, editada: true }
+                        : m
+                )
+            );
+        }
+    };
+
+    // Função responsável por excluir uma mensagem.
+    // Envia uma requisição DELETE para o backend
+    // informando o ID da mensagem e o usuário que
+    // está solicitando a exclusão.
+    // Caso a operação seja autorizada e concluída,
+    // a mensagem é removida do estado local para que
+    // desapareça imediatamente da interface.
+    const excluirMensagem = async (msg) => {
+        const resposta = await fetch(`http://127.0.0.1:8000/mensagens/${msg.id_mensagem}`, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                usuario: usuarioLogado
+            })
+        });
+
+        if (resposta.ok) {
+            setHistorico((prev) =>
+                prev.filter((m) => m.id_mensagem !== msg.id_mensagem)
+            );
+        }
+    };
+
+
+
+    // A Interface da Tela
+    return (
+        <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
 
         const resposta = await fetch(`http://127.0.0.1:8000/mensagens/${msg.id_mensagem}`, {
             method: "PUT",
